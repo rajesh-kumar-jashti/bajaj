@@ -2,10 +2,15 @@ const express = require('express');
 const multer = require('multer');
 const { check, validationResult } = require('express-validator');
 const atob = require('atob');
+const cors = require('cors')
+
+
+
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
+app.use(cors())
 app.use(express.json({limit: '5mb'})); 
 
 const storage = multer.memoryStorage();
