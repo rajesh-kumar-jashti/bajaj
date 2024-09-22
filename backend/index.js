@@ -1,78 +1,83 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const multer = require('multer');
-const atob = require('atob'); 
-
-const cors = require('cors')
-
+const { check, validationResult } = require('express-validator');
+const atob = require('atob');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-app.use(cors());
-const PORT = process.env.PORT || 3000;
+app.use(express.json({limit: '5mb'})); 
 
-app.use(bodyParser.json());
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-const upload = multer({ storage: multer.memoryStorage() });
-
-function validateBase64File(base64String) {
+function decodeBase64File(file_b64) {
     try {
-        if (!base64String || typeof base64String !== 'string') return false;
-        atob(base64String); 
-        return true;
-    } catch (err) {
-        return false;
+        const buffer = Buffer.from(file_b64, 'base64');
+        const mimeType = 'image/png'; 
+        const sizeKB = buffer.length / 1024;
+        return { valid: true, mimeType, sizeKB };
+    } catch (error) {
+        return { valid: false };
     }
 }
 
-
-app.post('/bfhl', upload.single('file_b64'), (req, res) => {
-    const { data, file_b64 } = req.body;
-    const fullName = 'Rajesh_Kumar_Jashti';
-    const dob = '26042003'; 
-    const email = "rajeshkumar_jashti@srmap.edu.in";
-    const rollNumber = "AP21110011415";
-
-    let numbers = [];
-    let alphabets = [];
-    let highestLowercaseAlphabet = [];
-
-    data.forEach(item => {
-        if (!isNaN(item)) {
-            numbers.push(item);
-        } else if (/[a-zA-Z]/.test(item)) {
-            alphabets.push(item);
+app.post('/bfhl',
+    [
+        check('data').isArray().withMessage('Data should be an array'),
+        check('file_b64').optional().isString().withMessage('File should be a Base64 string'),
+    ],
+    (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
         }
+
+        const { data, file_b64 } = req.body;
+        const fullName = "Rajesh_Kumar_Jashti";  
+        const dob = "26042003"; 
+        const userId = `${fullName}_${dob}`;
+        const email = "rajeshkumar_jashti@srmap.edu.in";
+        const rollNumber = "AP21110011415";
+
+        const numbers = data.filter(item => !isNaN(item));
+        const alphabets = data.filter(item => /^[a-zA-Z]$/.test(item));
+        const lowercaseAlphabets = alphabets.filter(item => /^[a-z]$/.test(item));
+        const highestLowercaseAlphabet = lowercaseAlphabets.length > 0
+            ? [lowercaseAlphabets.sort().pop()]
+            : [];
+
+        let fileValid = false, fileMimeType = null, fileSizeKB = null;
+        if (file_b64) {
+            const fileInfo = decodeBase64File(file_b64);
+            fileValid = fileInfo.valid;
+            if (fileValid) {
+                fileMimeType = fileInfo.mimeType;
+                fileSizeKB = fileInfo.sizeKB;
+            }
+        }
+
+        const response = {
+            "is_success": true,
+            "user_id": userId,
+            "email": email,
+            "roll_number": rollNumber,
+            "numbers": numbers,
+            "alphabets": alphabets,
+            "highest_lowercase_alphabet": highestLowercaseAlphabet,
+            "file_valid": fileValid,
+            "file_mime_type": fileMimeType,
+            "file_size_kb": fileSizeKB
+        };
+
+        res.status(200).json(response);
     });
-
-    
-    const lowercaseAlphabets = alphabets.filter(char => char === char.toLowerCase());
-    if (lowercaseAlphabets.length > 0) {
-        highestLowercaseAlphabet.push(lowercaseAlphabets.sort().reverse()[0]);
-    }
-
-    const fileValid = validateBase64File(file_b64);
-    const fileMimeType = fileValid ? 'image/png' : null;  
-    const fileSizeKb = fileValid ? Buffer.byteLength(file_b64, 'base64') / 1024 : null;
-
-    res.json({
-        is_success: true,
-        user_id: `${fullName}_${dob}`,
-        email: email,
-        roll_number: rollNumber,
-        numbers,
-        alphabets,
-        highest_lowercase_alphabet: highestLowercaseAlphabet,
-        file_valid: fileValid,
-        file_mime_type: fileMimeType,
-        file_size_kb: fileSizeKb
-    });
-});
-
 
 app.get('/bfhl', (req, res) => {
     res.status(200).json({ operation_code: 1 });
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
